@@ -2,20 +2,36 @@ const gulp = require("gulp");
 const tsMorph = require("ts-morph");
 const fs = require("fs");
 const path = require("path");
-const glob = require("glob");
+
+const resolveImports = (project, filePath, filePaths = new Set()) => {
+  if (filePaths.has(filePath)) {
+    console.warn(`Warning: Circular import detected at ${filePath}`);
+    return filePaths;
+  }
+
+  const sourceFile = project.addSourceFileAtPath(filePath);
+  filePaths.add(filePath);
+
+  sourceFile.getImportDeclarations().forEach((importDeclaration) => {
+    const importFilePath = path.join(
+      path.dirname(filePath),
+      importDeclaration.getModuleSpecifierValue() + ".ts"
+    );
+    resolveImports(project, importFilePath, filePaths);
+  });
+
+  return filePaths;
+};
 
 const concatTS = function (done) {
   const project = new tsMorph.Project({ tsConfigFilePath: "tsconfig.json" });
-  const inputFilePathsPatterns = ["src/components/**/*.ts", "src/index.ts"];
+  const entryFilePath = "src/index.ts";
   const outputFile = path.join("dist", "output.js");
 
   let outputText = "";
 
-  // Use glob.sync() to get an array of file paths that match each glob pattern
-  let inputFilePaths = [];
-  for (const pattern of inputFilePathsPatterns) {
-    inputFilePaths = [...inputFilePaths, ...glob.sync(pattern)];
-  }
+  // Recursively resolve the imports starting from the entry file
+  const inputFilePaths = resolveImports(project, entryFilePath);
 
   for (const inputFilePath of inputFilePaths) {
     const sourceFile = project.addSourceFileAtPath(inputFilePath);

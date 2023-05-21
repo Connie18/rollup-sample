@@ -3,22 +3,24 @@ const tsMorph = require("ts-morph");
 const fs = require("fs");
 const path = require("path");
 
-const resolveImports = (project, filePath, filePaths = new Set()) => {
-  if (filePaths.has(filePath)) {
+const getImportFilePaths = (project, filePath, filePaths = []) => {
+  // Skip if the file has already been processed
+  if (filePaths.includes(filePath)) {
     console.warn(`Warning: Circular import detected at ${filePath}`);
     return filePaths;
   }
 
   const sourceFile = project.addSourceFileAtPath(filePath);
-  filePaths.add(filePath);
 
   sourceFile.getImportDeclarations().forEach((importDeclaration) => {
     const importFilePath = path.join(
       path.dirname(filePath),
       importDeclaration.getModuleSpecifierValue() + ".ts"
     );
-    resolveImports(project, importFilePath, filePaths);
+    getImportFilePaths(project, importFilePath, filePaths);
   });
+
+  filePaths.push(filePath);
 
   return filePaths;
 };
@@ -31,7 +33,7 @@ const concatTS = function (done) {
   let outputText = "";
 
   // Recursively resolve the imports starting from the entry file
-  const inputFilePaths = resolveImports(project, entryFilePath);
+  const inputFilePaths = getImportFilePaths(project, entryFilePath);
 
   for (const inputFilePath of inputFilePaths) {
     const sourceFile = project.addSourceFileAtPath(inputFilePath);
